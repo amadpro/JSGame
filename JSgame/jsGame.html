@@ -1,0 +1,1454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+<title>Muhsin and Aqeel's</title>
+<style>
+body { 
+  margin: 0; 
+  overflow: hidden; 
+  display: flex; 
+  justify-content: center; 
+  align-items: center; 
+  height: 100vh; 
+  background-color: black;
+}
+
+</style>
+</style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+<audio id="bgMusic" src="background.mp3" loop hidden></audio>
+<audio id="jumpSound" src="jump.mp3" preload="auto"></audio>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+let time = 0;
+let comets = [];
+
+let chosenBackgroundColor = "#000";
+const backgroundColors = ["#0b1d51", "#2c1b47"];
+
+let mouseX = 0;
+let mouseY = 0;
+
+let messageVisible = true;
+let secondMessageVisible = false;
+let messageTimer = Date.now();
+const messageDuration = 3000;
+const secondMessageDuration = 3000; 
+let secondMessageTimer = 0;
+
+brightness = 1;
+
+const BASE_WIDTH = 960;
+const BASE_HEIGHT = 540;
+
+let triangleCount = null;
+const triangles = [];
+
+function updateComets() {
+    for (let comet of comets) {
+        // Move comet
+        comet.x += comet.speed * Math.cos(comet.angle);
+        comet.y += comet.speed * Math.sin(comet.angle);
+
+        // Tail position
+        const tailX = comet.x - comet.tailLength * Math.cos(comet.angle);
+        const tailY = comet.y - comet.tailLength * Math.sin(comet.angle);
+
+        // Gray tail gradient
+        const gradient = ctx.createLinearGradient(comet.x, comet.y, tailX, tailY);
+        gradient.addColorStop(0, "rgba(200, 200, 200, 1)");
+        gradient.addColorStop(0.5, "rgba(160, 160, 160, 0.5)");
+        gradient.addColorStop(1, "rgba(120, 120, 120, 0)");
+
+        ctx.strokeStyle = gradient;
+        ctx.lineWidth = comet.size * 0.8;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(comet.x, comet.y);
+        ctx.lineTo(tailX, tailY);
+        ctx.stroke();
+
+        // Glow effect in gray
+        ctx.save();
+        ctx.shadowBlur = 25;
+        ctx.shadowColor = "rgba(180, 180, 180, 0.6)";
+        ctx.beginPath();
+        ctx.arc(comet.x, comet.y, comet.size * 0.7, 0, Math.PI * 2);
+        ctx.fillStyle = "rgb(200, 200, 200)";
+        ctx.fill();
+        ctx.restore();
+
+        // Remove off-screen comets
+        if (
+            comet.x < -100 || comet.x > canvas.width + 100 ||
+            comet.y < -100 || comet.y > canvas.height + 100
+        ) {
+            const index = comets.indexOf(comet);
+            if (index !== -1) {
+                comets.splice(index, 1);
+            }
+        }
+    }
+}
+
+function spawnCometGroup() {
+    const count = 3 + Math.floor(Math.random() * 3);
+    const baseAngle = Math.random() * Math.PI / 3 + Math.PI / 4;
+    const baseX = Math.random() * canvas.width;
+    const baseY = -100;
+
+    for (let i = 0; i < count; i++) {
+        let angleOffset = (Math.random() - 0.5) * 0.2;
+        let positionOffset = (Math.random() - 0.5) * 100;
+
+        const size = 5 + Math.random() * 10;
+
+        comets.push({
+            x: Math.floor(Math.random() * (1400 - 1200 + 1)) + 1200,
+            y: baseY + Math.random() * 80,
+            size: size,
+            speed: Math.random() * 3 + 6,
+            angle: 0.7 * Math.PI / 2 + Math.PI / 2,
+            tailLength: size * 15 + Math.random() * 30, // trail grows with size
+            tailOpacity: 0.8
+        });
+    }
+}
+
+setInterval(spawnCometGroup, Math.random() * 5000 + 8000);
+
+window.addEventListener("click", () => {
+    const bgMusic = document.getElementById("bgMusic");
+    bgMusic.volume = 0.9;
+
+    if (bgMusic.paused) {
+        bgMusic.play();
+    }
+}, { once: true });
+
+canvas.addEventListener("click", () => {
+    if (togglePlatform.visible && isMouseOverPlatform(togglePlatform)) {
+        togglePlatform.visible = false;
+        togglePlatform2.visible = false;
+        slidersVisible = false;
+    }
+
+    if (togglePlatform2.visible && isMouseOverPlatform(togglePlatform2)) {
+        togglePlatform.visible = false;
+        togglePlatform2.visible = false;
+        slidersVisible = true;
+    }
+});
+
+canvas.addEventListener("mousedown", (e) => {
+    if (!slidersVisible) return;
+
+    const rect = canvas.getBoundingClientRect();
+    const mouseXWorld = (e.clientX - rect.left) / scale + camera.x;
+    const mouseYWorld = (e.clientY - rect.top) / scale + camera.y;
+
+    sliders.forEach((slider, index) => {
+        const thumbY = slider.y + (1 - slider.value) * slider.height;
+        const dx = mouseXWorld - slider.x;
+        const dy = mouseYWorld - thumbY;
+        if (dx * dx + dy * dy <= 100) {
+            draggingSliderIndex = index;
+        }
+    });
+});
+
+canvas.addEventListener("mousemove", (e) => {
+    mouseX = e.offsetX;
+    mouseY = e.offsetY;
+
+    if (draggingSliderIndex !== null && slidersVisible) {
+        const rect = canvas.getBoundingClientRect();
+        const mouseYWorld = (e.clientY - rect.top) / scale + camera.y;
+        const slider = sliders[draggingSliderIndex];
+
+        const clamped = Math.max(slider.y, Math.min(slider.y + slider.height, mouseYWorld));
+        const relativeY = clamped - slider.y;
+        slider.value = 1 - (relativeY / slider.height);
+    }
+});
+
+canvas.addEventListener("mouseup", () => {
+    draggingSliderIndex = null;
+});
+
+let slidersVisible = true;
+let trianglesInitialized = false;
+
+const sliders = [
+    { x: BASE_WIDTH / 2 - 280, y: 50, height: 400, value: 0.5 },
+    { x: BASE_WIDTH / 2, y: 50, height: 400, value: 1 },
+    { x: BASE_WIDTH / 2 + 280, y: 50, height: 400, value: 0.5 }
+];
+
+let draggingSliderIndex = null;
+
+function randomSpeed(min = 0.05, max = 0.15) {
+    let speed = 0;
+    while (Math.abs(speed) < min) {
+        speed = (Math.random() - 0.5) * (max * 2);
+    }
+    return speed;
+}
+
+function randomSize() {
+    const r = Math.random();
+    if (r < 0.2) {
+        return 6 + Math.random() * 3;     // 6–9 px
+    } else if (r > 0.8) {
+        return 9 + Math.random() * 4;     // 9–13 px
+    } else {
+        return 5 + Math.random() * 5;     // 5–10 px
+    }
+}
+
+
+for (let i = 0; i < triangleCount; i++) {
+    triangles.push({
+        x: Math.random() * BASE_WIDTH * 2 - BASE_WIDTH / 2,
+        y: Math.random() * BASE_HEIGHT * 2 - BASE_HEIGHT / 2,
+        size: randomSize(),
+        opacity: 0.2 + Math.random() * 0.3,
+        speedX: randomSpeed(0.02, 0.07),
+        speedY: randomSpeed(0.02, 0.07),
+        angle: Math.random() * Math.PI * 2
+    });
+}
+
+let transitioning = false;
+let transitionDirection = "expand";
+let transitionRadius = 0;
+let transitionMaxRadius = 0;
+let transitionX = 0;
+let transitionY = 0;
+let transitionCallback = null;
+
+const camera = {
+    x: 0,
+    y: 0,
+    width: BASE_WIDTH,
+    height: BASE_HEIGHT,
+};
+
+let currentLevel = 0;
+let platforms = [];
+
+let spikes = [];
+
+const player = {
+    width: 35,
+    height: 35,
+    speed: 4.1,
+    dx: 0,
+    dy: 0,
+    accel: 0.6,
+    decel: 0.3,
+    friction: 0.7,
+    airFriction: 0.9,
+    groundFriction: 0.8,
+    jumpPower: 11,
+    minJumpPower: 5,
+    gravity: 1,
+    grounded: false,
+    jumpBuffer: 0,
+    maxJumpBuffer: 10,
+    jumpKeyHeld: false,
+    coyoteTime: 8,
+    coyoteTimer: 0,
+    maxJumpHold: 16,
+    jumpHoldTimer: 0,
+    landingSlide: false,
+    respawnCooldown: 0,
+    maxRespawnCooldown: 10,
+};
+
+let particles = [];
+
+const keys = { a: false, d: false };
+
+const levels = [
+    {
+        spawn: { x: 600, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: 130, y: 300, width: 120, height: 20 },
+            { x: 300, y: 400, width: 120, height: 20 },
+            { x: 700, y: 200, width: 120, height: 20 },
+            { x: -70, y: -200, width: 120, height: 2000 },
+            { x: 900, y: -200, width: 120, height: 2000 },
+        ],
+        door: { x: 780, y: 137, width: 40, height: 60 },
+        message: "WASD, ARROWS to move. Space to jump too",
+        secondMessage: "Press T for 'Pausing' the game",
+    },
+    {
+        spawn: { x: 120, y: 430 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: -70, y: -200, width: 120, height: 2000 },
+            { x: 900, y: -200, width: 120, height: 2000 },
+        ],
+        door: { x: 850, y: 437, width: 40, height: 60 },
+        spikes: [
+            { x: 200, y: 487, width: 40, height: 10 },
+            { x: 350, y: 487, width: 40, height: 10 },
+            { x: 500, y: 487, width: 40, height: 10 },
+            { x: 750, y: 487, width: 40, height: 10 },
+        ],
+        message: "Spike KILLS you.",
+    },
+    {
+        spawn: { x: 100, y: 460 },
+        platforms: [
+            { x: 400, y: -240, width: 20, height: 5000 },
+            { x: -10, y: 500, width: 1000, height: 45 },
+        ],
+        door: { x: 500, y: 437, width: 40, height: 60 },
+        spikes: [
+            { x: 600, y: 487, width: 40, height: 10 },
+            { x: 800, y: 487, width: 40, height: 10 },
+        ],
+        message: "                                 Let's go -around- the world",
+    },
+    {
+        spawn: { x: 150, y: 460 },
+        platforms: [
+            { x: -70, y: -200, width: 120, height: 2000 },
+            { x: 900, y: -200, width: 120, height: 2000 },
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: 799, y: 140, width: 100, height: 20 }
+        ],
+        door: { x: 857, y: 77, width: 40, height: 60 },
+        message: "Use OPTIONS....",
+        secondMessage: "When going too high, you die.",
+    },
+    {
+        spawn: { x: 100, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: -70, y: -200, width: 120, height: 2000 },
+            { x: 900, y: -200, width: 120, height: 2000 },
+            { x: 248, y: -690, width: 20, height: 1000 },
+        ],
+        door: { x: 700, y: 437, width: 40, height: 60 },
+        spikes: [
+            { x: 600, y: 487, width: 40, height: 10 },
+        ],
+        button: { x: 52, y: 497, width: 200, height: 10 },
+        vanishPlatform: { x: 253, y: 310, width: 10, height: 191, visible: true },
+        message: "That yellow thing is detector",
+        secondMessage: "When didn't detects player, the laser's free",
+    },
+    {
+        spawn: { x: 100, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+        ],
+        door: { x: 460, y: 0, width: 40, height: 60 },
+        spikes: [
+            { x: 350, y: 487, width: 40, height: 10 },
+            { x: 550, y: 487, width: 40, height: 10 }
+        ],
+        button: { x: 390, y: 120, width: 180, height: 10 },
+        vanishPlatform: { x: -10, y: 100, width: 1000, height: 10, visible: true },
+        message: "                                       Good luck ;)",
+        secondMessage: "                                                                              Btw, the detector thing also detects GUI...",
+    },
+    {
+        spawn: { x: 100, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: -100, y: -200, width: 120, height: 2000 },
+            { x: 930, y: -200, width: 120, height: 2000 },
+            { x: 700, y: 100, width: 120, height: 100 },
+            { x: 880, y: 200, width: 50, height: 20 },
+            { x: 700, y: 0, width: 20, height: 100 },
+        ],
+        door: { x: 750, y: 40, width: 40, height: 60 },
+        button: { x: 750, y: 200, width: 21, height: 300 },
+        vanishPlatform: { x: 880, y: 0, width: 10, height: 200, visible: true },
+        message: "Figure out urself -_-",
+    },
+    {
+        spawn: { x: 50, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: 0, y: 340, width: 750, height: 20 },
+            { x: 730, y: -10, width: 20, height: 1200 },
+        ],
+        door: { x: 550, y: 280, width: 40, height: 60 },
+        spikes: [
+            { x: 250, y: 328, width: 40, height: 10 },
+            { x: 290, y: 328, width: 40, height: 10 },
+            { x: 330, y: 328, width: 40, height: 10 },
+            { x: 370, y: 328, width: 40, height: 10 },
+            { x: 410, y: 328, width: 40, height: 10 },
+            { x: 450, y: 328, width: 40, height: 10 },
+        ],
+        button: { x: 750, y: 50, width: 10, height: 400 },
+        vanishPlatform: { x: 0, y: -150, width: 10, height: 500, visible: true },
+        message: "This one's pretty easy!",
+    },
+    {
+        spawn: { x: 100, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: -70, y: -200, width: 120, height: 2000 },
+            { x: 900, y: -200, width: 120, height: 2000 },
+            { x: 200, y: 120, width: 350, height: 3000 },
+        ],
+        door: { x: 857, y: 437, width: 40, height: 60 },
+        spikes: [
+            { x: 300, y: 108, width: 20, height: 10 },
+            { x: 400, y: 108, width: 20, height: 10 },
+            { x: 530, y: 108, width: 20, height: 10 },
+            { x: 550, y: 487, width: 200, height: 10 },
+        ],
+        message: "Play around with gravity",
+    },
+    {
+        spawn: { x: 500, y: 460 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+            { x: -70, y: -10, width: 120, height: 310 },
+            { x: 900, y: -10, width: 120, height: 310 },
+            { x: -10, y: 300, width: 500, height: 20 },
+            { x: 700, y: 300, width: 500, height: 20 },
+            { x: 550, y: 50, width: 20, height: 450 },
+            { x: 400, y: -20, width: 20, height: 250 },
+            { x: 330, y: 300, width: 220, height: 97 },
+            { x: 800, y: 300, width: 220, height: 53 },
+            { x: 50, y: 100, width: 120, height: 20 },
+            { x: 240, y: 100, width: 40, height: 20 },
+            { x: 357, y: 100, width: 40, height: 20 },
+        ],
+        door: { x: 356, y: 40, width: 40, height: 60 },
+        spikes: [
+            { x: 400, y: 489, width: 10, height: 10 },
+            { x: 330, y: 400, width: 220, height: 10, angle: Math.PI },
+            { x: 0, y: 487, width: 300, height: 10 },
+            { x: 800, y: 487, width: 40, height: 10 },
+            { x: 800, y: 355, width: 160, height: 10, angle: Math.PI },
+            { x: 580, y: 487, width: 160, height: 10 },
+            { x: 417, y: 60, width: 50, height: 10 },
+            { x: 490, y: 120, width: 60, height: 10 },
+            { x: 417, y: 180, width: 60, height: 10 },
+            { x: 480, y: 235, width: 70, height: 10 },
+            { x: 190, y: 287, width: 70, height: 10 },
+        ],
+        button: { x: 750, y: 440, width: 21, height: 10 },
+        vanishPlatform: { x: 700, y: 0, width: 10, height: 300, visible: true },
+        message: "Have fun being tortured!",
+    },
+    {
+        spawn: { x: 500, y: 460 },
+        door: { x: 1000, y: 40, width: 40, height: 60 },
+        platforms: [
+            { x: -10, y: 500, width: 1000, height: 45 },
+        ],
+        message: "You did it? I didn't know you could!",
+        secondMessage: "Good job and stay here...",
+    }
+];
+
+function isMouseOverPlatform(p) {
+    const x = (p.x - camera.x) * scale;
+    const y = (p.y - camera.y) * scale;
+    const w = p.width * scale;
+    const h = p.height * scale;
+
+    return mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
+}
+
+function drawCustomButton(button) {
+    const x = (button.x - camera.x) * scale;
+    const y = (button.y - camera.y) * scale;
+    const w = button.width * scale;
+    const h = button.height * scale;
+
+    ctx.fillStyle = "orange";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "#AA6600";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function drawVanishPlatform(platform) {
+    levels[currentLevel].vanishPlatform.visible = true;
+    const x = (platform.x - camera.x) * scale;
+    const y = (platform.y - camera.y) * scale;
+    const w = platform.width * scale;
+    const h = platform.height * scale;
+
+    ctx.fillStyle = "red";
+    ctx.fillRect(x, y, w, h);
+    ctx.strokeStyle = "#FF073A";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+}
+
+function playerIsTouchingButton(player, button) {
+    const btnLeft = button.x;
+    const btnRight = button.x + button.width;
+    const btnTop = button.y;
+    const btnBottom = button.y + button.height;
+
+    const playerLeft = player.x;
+    const playerRight = player.x + player.width;
+    const playerTop = player.y;
+    const playerBottom = player.y + player.height;
+
+    const playerTouching = playerRight > btnLeft && playerLeft < btnRight && playerBottom > btnTop && playerTop < btnBottom;
+
+    let thumbTouching = false;
+    if (slidersVisible) {
+        sliders.forEach(slider => {
+            const thumbX = slider.x;
+            const thumbY = slider.y + (1 - slider.value) * slider.height;
+            const thumbSize = 35;
+
+            const thumbLeft = thumbX - thumbSize / 2;
+            const thumbRight = thumbX + thumbSize / 2;
+            const thumbTop = thumbY - thumbSize / 2;
+            const thumbBottom = thumbY + thumbSize / 2;
+
+            if (thumbRight > btnLeft && thumbLeft < btnRight &&
+                thumbBottom > btnTop && thumbTop < btnBottom) {
+                thumbTouching = true;
+            }
+        });
+    }
+
+    const toggleTouching = [togglePlatform, togglePlatform2].some(tp => {
+        if (!tp.visible) return false;
+
+        const tpLeft = tp.x;
+        const tpRight = tp.x + tp.width;
+        const tpTop = tp.y;
+        const tpBottom = tp.y + tp.height;
+
+        return tpRight > btnLeft && tpLeft < btnRight &&
+               tpBottom > btnTop && tpTop < btnBottom;
+    });
+
+    return playerTouching || thumbTouching || toggleTouching;
+}
+
+const togglePlatform = {
+    x:(BASE_WIDTH / 2 - 50) - 70,
+    y:(BASE_HEIGHT / 2) - 60,
+    width: 240,
+    height: 45,
+    visible: false
+};
+
+const togglePlatform2 = {
+    x:(BASE_WIDTH / 2 - 50) - 15,
+    y:(BASE_HEIGHT / 2) + 70,
+    width: 130,
+    height: 30,
+    visible: false
+};
+
+function startTransition(x, y, callback) {
+    const nextLevelSound = new Audio("Nextlevel.mp3");
+    nextLevelSound.volume = 0.3;
+    nextLevelSound.play();
+
+    transitioning = true;
+    transitionDirection = "expand";
+    transitionRadius = 0;
+    transitionX = x;
+    transitionY = y;
+    transitionMaxRadius = Math.hypot(canvas.width, canvas.height);
+    transitionCallback = callback;
+}
+
+function updateTransition() {
+    if (!transitioning) return;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(transitionX, transitionY, transitionRadius, 0, Math.PI * 2);
+    ctx.fillStyle = "#000";
+    ctx.fill();
+    ctx.restore();
+
+    if (transitionDirection === "expand") {
+        transitionRadius += 30;
+        if (transitionRadius >= transitionMaxRadius) {
+            transitionRadius = transitionMaxRadius;
+            if (transitionCallback) {
+                transitionCallback();
+                transitionCallback = null;
+                transitionDirection = "shrink";
+            }
+        }
+    } else if (transitionDirection === "shrink") {
+        transitionRadius -= 30;
+        if (transitionRadius <= 0) {
+            transitionRadius = 0;
+            transitioning = false;
+        }
+    }
+}
+
+function loadLevel(index) {
+    currentLevel = index;
+    const level = levels[index];
+    platforms = level.platforms.map(p => ({ ...p }));
+    spikes = level.spikes ? level.spikes.map(s => ({ ...s })) : [];
+    door = { ...level.door, visible: true };
+    player.x = level.spawn.x;
+    player.y = level.spawn.y;
+    player.dx = 0;
+    player.dy = 0;
+    player.respawnCooldown = player.maxRespawnCooldown;
+    particles = [];
+    togglePlatform.visible = false;
+    togglePlatform2.visible = false;
+    slidersVisible = false
+    if (level.message) {
+        messageVisible = true;
+        messageTimer = Date.now();
+    }
+}
+
+function drawParticles() {
+    for (const p of particles) {
+        ctx.save();
+
+        const flicker = Math.random() * 0.2;
+
+        const screenX = (p.x - camera.x) * scale;
+        const screenY = (p.y - camera.y) * scale;
+        const radius = (p.size * scale) / 2;
+
+        const adjustedAlpha = p.alpha * 0.6; // Lower overall opacity
+
+        const gradient = ctx.createRadialGradient(
+            screenX, screenY, 0,
+            screenX, screenY, radius
+        );
+        gradient.addColorStop(0, `rgba(255, 255, 0, ${adjustedAlpha})`);
+        gradient.addColorStop(0.5, `rgba(255, 100, 0, ${adjustedAlpha - flicker})`);
+        gradient.addColorStop(1, `rgba(100, 0, 0, 0)`);
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(screenX, screenY, radius, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.restore();
+    }
+}
+
+function drawStar(x, y, radius, opacity, angle) {
+    const spikes = 5;
+    const outerRadius = radius;
+    const innerRadius = radius / 2;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(angle);
+    ctx.beginPath();
+
+    let rot = Math.PI / 2 * 3;
+    let step = Math.PI / spikes;
+
+    ctx.moveTo(0, -outerRadius);
+    for (let i = 0; i < spikes; i++) {
+        ctx.lineTo(Math.cos(rot) * outerRadius, Math.sin(rot) * outerRadius);
+        rot += step;
+        ctx.lineTo(Math.cos(rot) * innerRadius, Math.sin(rot) * innerRadius);
+        rot += step;
+    }
+    ctx.closePath();
+    ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+    ctx.fill();
+    ctx.restore();
+}
+
+function updateTriangles() {
+    for (let tri of triangles) {
+        tri.x += tri.speedX;
+        tri.y += tri.speedY;
+
+        if (tri.x < -tri.size) tri.x = canvas.width + tri.size;
+        if (tri.x > canvas.width + tri.size) tri.x = -tri.size;
+        if (tri.y < -tri.size) tri.y = canvas.height + tri.size;
+        if (tri.y > canvas.height + tri.size) tri.y = -tri.size;
+
+        drawStar(tri.x, tri.y, tri.size, tri.opacity, tri.angle);
+    }
+}
+
+function createParticle(x, y) {
+    if (particles.length >= 100) particles.shift(); // Allow more particles for flame
+
+    const size = Math.random() * 4 + 4;
+    const rotation = Math.random() * Math.PI * 2;
+
+    // Random fire colors
+    const colors = [
+        "rgba(255, 255, 0, 1)",   // yellow
+        "rgba(255, 150, 0, 1)",   // orange
+        "rgba(255, 80, 0, 1)"     // deep orange/red
+    ];
+    const color = colors[Math.floor(Math.random() * colors.length)];
+
+    particles.push({
+        x,
+        y,
+        dx: (Math.random() - 0.5) * 0.8,
+        dy: -Math.random() * 1.5,
+        life: 30,
+        alpha: 1,
+        color,
+        size,
+        initialSize: size,
+        rotation
+    });
+}
+
+function updateParticles() {
+    for (let i = particles.length - 1; i >= 0; i--) {
+        const p = particles[i];
+        p.x += p.dx;
+        p.y += p.dy;
+        p.dy += 0.1;
+        p.life--;
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        }
+    }
+}
+
+function resizeCanvas() {
+    const windowRatio = window.innerWidth / window.innerHeight;
+    const baseRatio = BASE_WIDTH / BASE_HEIGHT;
+
+    if (windowRatio > baseRatio) {
+        canvas.height = window.innerHeight;
+        canvas.width = window.innerHeight * baseRatio;
+    } else {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerWidth / baseRatio;
+    }
+
+    scale = (canvas.width / BASE_WIDTH);
+}
+
+window.addEventListener("resize", resizeCanvas);
+resizeCanvas();
+
+const playerEyes = {
+    leftEyeX: 0,
+    leftEyeY: 0,
+    rightEyeX: 0,
+    rightEyeY: 0,
+    speed: 0.3,
+};
+
+function drawPlayer() {
+    const x = (player.x - camera.x) * scale;
+    const y = (player.y - camera.y) * scale;
+    const width = player.width * scale;
+    const height = player.height * scale;
+
+    // --- Outer Suit Layer
+    ctx.fillStyle = "#e0e0e0";
+    drawRoundedRect(x - 2, y - 2, width + 4, height + 4, 10 * scale);
+
+    // --- Main Suit Body
+    ctx.fillStyle = "#2c3e50";
+    drawRoundedRect(x, y, width, height, 8 * scale);
+
+    // --- Eye Movement Offsets
+    const dxOffset = player.dx * 0.3 * scale; // scaled movement
+    const dyOffset = player.dy * 0.3 * scale;
+
+    // --- Eyes
+    const eyeWidth = 5 * scale;
+    const eyeHeight = 8 * scale;
+    const eyeY = (y + height / 3) - 1;
+    const eyeSpacing = width * 0.18;
+
+    const targetLeftEyeX = x + width / 2 - eyeSpacing - eyeWidth / 2 + player.dx;
+    const targetRightEyeX = x + width / 2 + eyeSpacing - eyeWidth / 2 + player.dx;
+    const targetLeftEyeY = eyeY + player.dy;
+    const targetRightEyeY = targetLeftEyeY;
+
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(targetLeftEyeX, targetLeftEyeY, eyeWidth, eyeHeight);
+    ctx.fillRect(targetRightEyeX, targetRightEyeY, eyeWidth, eyeHeight);
+
+        // --- Helmet Visor Dome (with slight movement)
+    const visorY = y + height * 0.1;
+    const visorHeight = height * 0.7;
+    const visorWidth = width * 0.9;
+
+    ctx.fillStyle = "rgba(135, 206, 250, 0.3)";
+    ctx.beginPath();
+    ctx.ellipse(
+        x + width / 2 + dxOffset,
+        visorY + visorHeight / 2 + dyOffset,
+        visorWidth / 2,
+        visorHeight / 2,
+        0,
+        0,
+        Math.PI * 2
+    );
+    ctx.fill();
+
+    // --- Oxygen Tank (flips sides based on direction)
+    ctx.fillStyle = "#888";
+    const packWidth = width * 0.2;
+    const packHeight = height * 0.6;
+
+    const movingLeft = player.dx < -0.1;
+    const movingRight = player.dx > 0.1;
+
+    let tankOffsetX;
+    if (movingLeft) {
+        tankOffsetX = x + width;
+    } else if (movingRight) {
+        tankOffsetX = x - packWidth;
+    } else {
+        tankOffsetX = x - packWidth;
+    }
+
+    ctx.fillRect(tankOffsetX, y + height * 0.2, packWidth, packHeight);
+}
+
+function drawRoundedRect(x, y, width, height, radius) {
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
+    ctx.fill();
+}
+
+function drawPlatforms() {
+    if (door.visible) {
+    const doorX = (door.x - camera.x) * scale;
+    const doorY = (door.y - camera.y) * scale;
+    const doorWidth = door.width * scale;
+    const doorHeight = door.height * scale;
+
+    const centerX = doorX + doorWidth / 2;
+    const centerY = doorY + doorHeight / 2;
+    const maxRadius = Math.max(doorWidth, doorHeight) * 0.9;
+
+    const pulse = Math.sin(time * 2) * 0.1 + 1;
+    const glowRadius = maxRadius * pulse;
+
+    const glowGradient = ctx.createRadialGradient(
+        centerX, centerY, glowRadius * 0.3,
+        centerX, centerY, glowRadius
+    );
+    glowGradient.addColorStop(0, `rgba(200, 0, 255, ${0.4 + 0.2 * pulse})`);
+    glowGradient.addColorStop(1, "rgba(100, 0, 150, 0)");
+
+    ctx.fillStyle = glowGradient;
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, glowRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    const shimmerOffset = (time * 50) % doorHeight;
+    const coreGradient = ctx.createLinearGradient(
+        doorX, doorY + shimmerOffset,
+        doorX + doorWidth, doorY + doorHeight + shimmerOffset
+    );
+    coreGradient.addColorStop(0, "#d600ff");
+    coreGradient.addColorStop(1, "#6f00b5");
+
+    ctx.fillStyle = coreGradient;
+    ctx.fillRect(doorX, doorY, doorWidth, doorHeight);
+
+    ctx.save();
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(doorX - 1, doorY - 1, doorWidth + 2, doorHeight + 2);
+    ctx.restore();
+
+    ctx.save();
+
+// Create a linear gradient for the outline
+const outlineGradient = ctx.createLinearGradient(doorX, doorY, doorX + doorWidth, doorY + doorHeight);
+outlineGradient.addColorStop(0, "#2f2f2f");  // Dark gray at the start
+outlineGradient.addColorStop(1, "#000000");  // Pure black at the end
+
+ctx.strokeStyle = outlineGradient;
+ctx.lineWidth = 6;
+ctx.strokeRect(doorX, doorY, doorWidth, doorHeight);
+
+ctx.restore();
+
+}
+
+    platforms.forEach(p => {
+    const x = (p.x - camera.x) * scale;
+    const y = (p.y - camera.y) * scale;
+    const w = p.width * scale;
+    const h = p.height * scale;
+
+    ctx.fillStyle = "black";
+    ctx.fillRect(x, y, w, h);
+
+    ctx.strokeStyle = "#222";
+    ctx.lineWidth = 6;
+    ctx.strokeRect(x, y, w, h);
+
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, w, h);
+});
+
+    function isMouseOverPlatform(p) {
+    const x = (p.x - camera.x) * scale;
+    const y = (p.y - camera.y) * scale;
+    const w = p.width * scale;
+    const h = p.height * scale;
+
+    return mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
+}
+
+function drawTogglePlatform(p, text) {
+    const x = (p.x - camera.x) * scale;
+    const y = (p.y - camera.y) * scale;
+    const w = p.width * scale;
+    const h = p.height * scale;
+
+    const isHovered = isMouseOverPlatform(p);
+
+    ctx.fillStyle = isHovered ? "#dddddd" : "black";
+    ctx.fillRect(x, y, w, h);
+
+    ctx.strokeStyle = isHovered ? "#222222" : "#dddddd";
+    ctx.lineWidth = 3;
+    ctx.strokeRect(x, y, w, h);
+
+    const fontSize = Math.floor(h * 0.6);
+    ctx.font = `${fontSize}px 'Roboto', sans-serif`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = isHovered ? "black" : "#dddddd";
+    ctx.fillText(text, x + w / 2, y + h / 2);
+}
+
+const currentLvl = levels[currentLevel];
+if (currentLvl.button && currentLvl.vanishPlatform) {
+    drawCustomButton(currentLvl.button);
+
+    const isTouching = playerIsTouchingButton(player, currentLvl.button);
+    const vanish = currentLvl.vanishPlatform;
+
+    levels[currentLevel].vanishPlatform.visible = false;
+
+    const shouldDrawPlatform = (vanish.visible && !isTouching) || (!vanish.visible && isTouching);
+
+    if (shouldDrawPlatform) {
+        drawVanishPlatform(vanish);
+    }
+}
+
+if (togglePlatform.visible) {
+    drawTogglePlatform(togglePlatform, "RESUME");
+}
+if (togglePlatform2.visible) {
+    drawTogglePlatform(togglePlatform2, "OPTIONS");
+}
+
+if (slidersVisible) {
+    sliders.forEach((slider, index) => {
+        const sliderX = (slider.x - camera.x) * scale;
+        const sliderY = (slider.y - camera.y) * scale;
+        const sliderHeight = slider.height * scale;
+        const trackWidth = 15;
+
+        ctx.fillStyle = "rgba(136, 136, 136, 0.5)";
+        ctx.lineJoin = "round";
+
+        ctx.beginPath();
+        ctx.moveTo(sliderX - trackWidth / 2, sliderY);
+        ctx.lineTo(sliderX - trackWidth / 2, sliderY + sliderHeight);
+        ctx.lineTo(sliderX + trackWidth / 2, sliderY + sliderHeight);
+        ctx.lineTo(sliderX + trackWidth / 2, sliderY);
+        ctx.closePath();
+        ctx.fill();
+
+        const thumbY = sliderY + (1 - slider.value) * sliderHeight;
+        const thumbSize = 35 * scale;
+        ctx.fillStyle = "#0af";
+        ctx.fillRect(sliderX - thumbSize / 2, thumbY - thumbSize / 2, thumbSize, thumbSize);
+
+        if (index === 0) { 
+            player.gravity = 0.3 + (slider.value * 1.5);
+        }
+    
+        if (index === 2) {
+            if (!trianglesInitialized) {
+                slider.value = (16 - 2) / (30 - 2);
+                trianglesInitialized = true;
+            } else {
+                triangleCount = Math.round(slider.value * (30 - 2) + 2);
+            }
+        }
+        ctx.fillStyle = "white";
+        ctx.font = `${16 * scale}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "bottom";
+
+        const label = index === 0 ? "Gravity" : index === 1 ? "Brightness" : "Stars";
+        ctx.fillText(label, sliderX, sliderY - 10 * scale);
+    });
+} else {
+    trianglesInitialized = false
+}
+
+const msgFontSize = 20 * scale;
+
+if (messageVisible) {
+    const now = Date.now();
+    if (now - messageTimer < messageDuration) {
+        const msg = levels[currentLevel].message;
+        ctx.font = `${msgFontSize}px sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "top";
+
+        const x = canvas.width / 2;
+        const y = 15 * scale;
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "black";
+        ctx.strokeText(msg, x, y);
+
+        ctx.fillStyle = "black";
+        ctx.fillText(msg, x, y);
+    } else {
+        messageVisible = false;
+        secondMessageVisible = true;
+        secondMessageTimer = Date.now();
+    }
+}
+
+if (secondMessageVisible) {
+    const now = Date.now();
+    if (now - secondMessageTimer < secondMessageDuration) {
+        const msg = levels[currentLevel].secondMessage;
+        if (msg) {
+            ctx.font = `${msgFontSize}px sans-serif`;
+            ctx.textAlign = "center";
+            ctx.textBaseline = "top";
+
+            const x = canvas.width / 2;
+            const y = 15 * scale;
+
+            ctx.lineWidth = 1;
+            ctx.strokeStyle = "black";
+            ctx.strokeText(msg, x, y);
+
+            ctx.fillStyle = "black";
+            ctx.fillText(msg, x, y);
+        }
+    } else {
+        secondMessageVisible = false;
+    }
+}
+
+}
+
+function drawSpikes() {
+    ctx.shadowColor = "rgba(0, 0, 0, 0.5)";
+    ctx.shadowBlur = 8;
+
+    spikes.forEach(s => {
+        const spikeCount = Math.floor(s.width / 10);
+        const x = (s.x - camera.x) * scale;
+        const y = (s.y - camera.y) * scale;
+        const w = s.width * scale;
+        const h = s.height * scale;
+        const angle = s.angle || 0;
+
+        ctx.save();
+
+        ctx.translate(x + w / 2, y + h / 2);
+        ctx.rotate(angle);
+        ctx.translate(-w / 2, -h / 2);
+
+        ctx.beginPath();
+        const gradient = ctx.createLinearGradient(0, 0, w, h);
+        gradient.addColorStop(0, "#808080");
+        gradient.addColorStop(1, "#A9A9A9");
+
+        ctx.fillStyle = gradient;
+
+        for (let i = 0; i < spikeCount; i++) {
+            const baseX = i * 10 * scale;
+            const baseY = h;
+            ctx.moveTo(baseX, baseY);
+            ctx.lineTo(baseX + 5 * scale, 0);
+            ctx.lineTo(baseX + 10 * scale, baseY);
+        }
+
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = "#000000";
+        ctx.stroke();
+        ctx.fill();
+
+        ctx.restore();
+    });
+}
+
+function checkSpikeDeath() {
+    spikes.forEach(s => {
+        if (
+            player.x < s.x + s.width &&
+            player.x + player.width > s.x &&
+            player.y < s.y + s.height &&
+            player.y + player.height > s.y
+        ) {
+            loadLevel(currentLevel);
+        }
+    });
+}
+
+function applyGravity() {
+    if (!player.grounded) player.dy += player.gravity;
+}
+
+function movePlayer() {
+    if (player.respawnCooldown > 0) return;
+    if (keys.a && keys.d) {
+        player.dx *= player.groundFriction;
+    } else {
+        if (keys.d) player.dx += player.accel;
+        else if (keys.a) player.dx -= player.accel;
+        else if (player.grounded) {
+            player.dx *= player.groundFriction;
+        } else {
+            player.dx *= player.airFriction;
+        }
+    }
+
+    player.dx = Math.max(Math.min(player.dx, player.speed), -player.speed);
+}
+
+
+function handleCollisions() {
+    player.x += player.dx;
+
+    platforms.forEach(p => {
+        if (
+            player.x < p.x + p.width &&
+            player.x + player.width > p.x &&
+            player.y < p.y + p.height &&
+            player.y + player.height > p.y
+        ) {
+            if (player.dx > 0) {
+                player.dx = 0;
+                player.x = p.x - player.width;
+            } else if (player.dx < 0) {
+                player.dx = 0;
+                player.x = p.x + p.width;
+            }
+        }
+    });
+
+    player.y += player.dy;
+    let onGround = false;
+
+    platforms.forEach(p => {
+        if (
+            player.x < p.x + p.width &&
+            player.x + player.width > p.x &&
+            player.y < p.y + p.height &&
+            player.y + player.height > p.y
+        ) {
+            if (player.dy > 0) {
+                player.dy = 0;
+                player.y = p.y - player.height;
+                onGround = true;
+            } else if (player.dy < 0) {
+                player.dy = 0;
+                player.y = p.y + p.height;
+                player.jumpHoldTimer = 0;
+                player.jumpBuffer = 0;
+            }
+        }
+    });
+
+    function handleTogglePlatformCollision(p) {
+        if (
+            player.x < p.x + p.width &&
+            player.x + player.width > p.x &&
+            player.y < p.y + p.height &&
+            player.y + player.height > p.y
+        ) {
+            if (player.dy > 0 && player.y + player.height - player.dy <= p.y) { 
+                player.dy = 0;
+                player.y = p.y - player.height;
+                onGround = true;
+            } else if (player.dy < 0 && player.y - player.dy >= p.y + p.height) { 
+                player.dy = 0;
+                player.y = p.y + p.height;
+                player.jumpHoldTimer = 0;
+                player.jumpBuffer = 0;
+            }
+
+            if (player.y + player.height > p.y + 5 && player.y < p.y + p.height - 5) { 
+                if (player.dx > 0 && player.x + player.width - player.dx <= p.x) { 
+                    player.dx = 0;
+                    player.x = p.x - player.width;
+                } else if (player.dx < 0 && player.x - player.dx >= p.x + p.width) { 
+                    player.dx = 0;
+                    player.x = p.x + p.width;
+                }
+            }
+        }
+    }
+
+    if (togglePlatform.visible) handleTogglePlatformCollision(togglePlatform);
+    if (togglePlatform2.visible) handleTogglePlatformCollision(togglePlatform2);
+
+    if (slidersVisible) {
+        sliders.forEach(slider => {
+            const thumbX = slider.x - (30 * scale) / 2;
+            const thumbY = slider.y + (1 - slider.value) * slider.height - (30 * scale) / 2;
+            const thumbWidth = 30 * scale;
+            const thumbHeight = 30 * scale;
+
+            if (
+                player.x + player.width > thumbX &&
+                player.x < thumbX + thumbWidth &&
+                player.y + player.height <= thumbY + 10 &&
+                player.y + player.height + player.dy >= thumbY
+            ) {
+                player.y = thumbY - player.height;
+                player.dy = 0;
+                onGround = true;
+            }
+        });
+    }
+
+    const currentLevelindex = levels[currentLevel];
+    if (currentLevelindex.vanishPlatform && currentLevelindex.vanishPlatform.visible) {
+    const p = currentLevelindex.vanishPlatform;
+
+    if (
+        player.x < p.x + p.width &&
+        player.x + player.width > p.x &&
+        player.y < p.y + p.height &&
+        player.y + player.height > p.y
+    ) {
+        loadLevel(currentLevel);
+    }
+    }
+
+    player.grounded = onGround;
+
+    if (player.grounded) {
+        player.coyoteTimer = player.coyoteTime;
+    } else if (player.coyoteTimer > 0) {
+        player.coyoteTimer--;
+    }
+}
+
+function checkJump() {
+    if (player.respawnCooldown > 0) return;
+
+    const jumpStarted = (player.grounded || player.coyoteTimer > 0) && player.jumpBuffer > 0;
+
+    if (jumpStarted) {
+        player.jumpHoldTimer = player.maxJumpHold;
+        player.grounded = false;
+        player.coyoteTimer = 0;
+        player.jumpBuffer = 0;
+
+        const jumpSound = document.getElementById("jumpSound");
+        jumpSound.currentTime = 0;
+        jumpSound.volume = 0.3; 
+        jumpSound.play();
+    }
+
+    if (player.jumpHoldTimer > 0) {
+        const holdFactor = player.jumpHoldTimer / player.maxJumpHold;
+        const jumpStrength = player.minJumpPower + (player.jumpPower - player.minJumpPower) * holdFactor;
+        player.dy = -jumpStrength;
+        player.jumpHoldTimer--;
+    }
+}
+
+function update() {
+    ctx.fillStyle = chosenBackgroundColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    updateTriangles();
+
+    const rawValue = sliders[2].value;
+    triangleCount = Math.round(rawValue * (30 - 2) + 2);
+
+    while (triangles.length < triangleCount) {
+        triangles.push({
+            x: Math.random() * BASE_WIDTH * 2 - BASE_WIDTH / 2,
+            y: Math.random() * BASE_HEIGHT * 2 - BASE_HEIGHT / 2,
+            size: randomSize(),
+            opacity: 0.2 + Math.random() * 0.3,
+            speedX: randomSpeed(0.02, 0.07),
+            speedY: randomSpeed(0.02, 0.07),
+            angle: Math.random() * Math.PI * 2
+        });
+    }
+    while (triangles.length > triangleCount) {
+        triangles.pop();
+    }
+
+    updateParticles();
+
+    if (player.respawnCooldown > 0) {
+        player.respawnCooldown--;
+    }
+
+    updateComets(); 
+    drawParticles();
+    drawSpikes();
+    drawPlatforms();
+    movePlayer();
+    time += 0.016;
+
+    const level = levels[currentLevel];
+
+    if (slidersVisible) {
+        sliders.forEach(slider => {
+            const sliderX = (slider.x - camera.x) * scale;
+            const sliderY = (slider.y - camera.y) * scale;
+            const sliderHeight = slider.height * scale;
+            const thumbY = sliderY + (1 - slider.value) * sliderHeight;
+            const thumbSize = 35 * scale;
+
+            ctx.fillStyle = "#000";
+            ctx.fillRect(sliderX - thumbSize / 2, thumbY - thumbSize / 2, thumbSize, thumbSize);
+
+            ctx.strokeStyle = "#fff";
+            ctx.lineWidth = 3;
+            ctx.strokeRect(sliderX - thumbSize / 2, thumbY - thumbSize / 2, thumbSize, thumbSize);
+        });
+    }
+
+    drawPlayer();
+
+    if (Math.abs(player.dx) > 1 && player.grounded) {
+        createParticle(player.x + player.width / 2 + (Math.random() - 0.5) * 4, player.y + player.height - 2, "#FFF");
+    }
+
+    if (!player.grounded && player.dy < 0 && player.jumpKeyHeld) {
+        createParticle(player.x + player.width / 2, player.y + player.height, "#FFFA");
+    }
+
+    applyGravity();
+    handleCollisions();
+    checkJump();
+    checkSpikeDeath();
+
+if (player.x < camera.x) {
+    player.x = camera.x + camera.width - player.width;
+} else if (player.x > camera.x + camera.width) {
+    player.x = camera.x;
+}
+
+if (player.y < camera.y || player.y > camera.y + camera.height) {
+    loadLevel(currentLevel); 
+}
+
+    if (player.jumpBuffer > 0) player.jumpBuffer--;
+
+    if (
+    player.x < door.x + door.width &&
+    player.x + player.width > door.x &&
+    player.y < door.y + door.height &&
+    player.y + player.height > door.y
+    ) {
+    if (door.visible && !transitioning) {
+        startTransition(
+            (door.x + door.width / 2 - camera.x) * scale, 
+            (door.y + door.height / 2 - camera.y) * scale,
+            () => {
+                currentLevel++;
+                if (currentLevel >= levels.length) currentLevel = 0;
+                chosenBackgroundColor = backgroundColors[Math.floor(Math.random() * backgroundColors.length)];
+                loadLevel(currentLevel);
+            }
+            );
+        }
+    }
+
+    updateTransition();
+
+    if (slidersVisible) {
+    brightness = sliders[1].value;
+    }
+
+    const maxDim = 0.7;
+    const dimOpacity = (1 - brightness) * maxDim;
+
+    ctx.fillStyle = `rgba(0, 0, 0, ${dimOpacity})`;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    requestAnimationFrame(update);
+}
+
+document.addEventListener("keydown", e => {
+    if (e.key === "t" || e.key === "T") {
+    slidersVisible = false;
+
+    const anyVisible = togglePlatform.visible || togglePlatform2.visible;
+
+    if (!anyVisible) {
+        togglePlatform.visible = true;
+        togglePlatform2.visible = true;
+    } else {
+        togglePlatform.visible = false;
+        togglePlatform2.visible = false;
+    }
+    }
+    if (e.key === "d" || e.key === "ArrowRight" || e.key === "D") keys.d = true;
+    if (e.key === "a" || e.key === "ArrowLeft" || e.key === "A") keys.a = true;
+    if ((e.key === "w" || e.key === "ArrowUp" || e.key === " " || e.key === "W") && !player.jumpKeyHeld) {
+        player.jumpKeyHeld = true;
+        player.jumpBuffer = player.maxJumpBuffer;
+    }
+});
+
+document.addEventListener("keyup", e => {
+    if (e.key === "d" || e.key === "ArrowRight" || e.key === "D") keys.d = false;
+    if (e.key === "a" || e.key === "ArrowLeft" || e.key === "A") keys.a = false;
+    if (e.key === "w" || e.key === "ArrowUp" || e.key === " " || e.key === "W") {
+        player.jumpKeyHeld = false;
+        player.jumpHoldTimer = 0;
+    }
+});
+
+chosenBackgroundColor = backgroundColors[Math.floor(Math.random() * backgroundColors.length)];
+loadLevel(0);
+update();
+</script>
+</body>
+</html>

@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>SPause - Home</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background-color: #0b1d51;
+      color: #fff;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    canvas {
+      position: fixed;
+      top: 0;
+      left: 0;
+      z-index: -1;
+      width: 100%;
+      height: 100%;
+    }
+
+    #fadeOverlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: black;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 9999;
+      transition: opacity 0.5s ease;
+    }
+
+    nav {
+      width: 100%;
+      background-color: rgba(0, 0, 0, 0.6);
+      padding: 1rem 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      gap: 2rem;
+      position: fixed;
+      top: 0;
+      z-index: 100;
+    }
+
+    .logo {
+      position: absolute;
+      left: 1rem;
+      top: 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 40px;
+      height: 40px;
+    }
+
+    .logo .pause-icon {
+      width: 24px;
+      height: 24px;
+      animation: pulse 2s infinite;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .logo .pause-icon::before,
+    .logo .pause-icon::after {
+      content: '';
+      display: block;
+      width: 6px;
+      height: 100%;
+      background: black;
+      border-radius: 2px;
+      margin: 0 2px;
+    }
+
+    nav a button {
+      background: #a14a23;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      color: white;
+      transition: transform 0.3s, background-color 0.3s, box-shadow 0.3s;
+      font-weight: bold;
+    }
+
+    nav a button:hover {
+      transform: scale(1.05);
+      background-color: #c25730;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    }
+
+    nav button {
+      background: #a14a23;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      font-size: 1.1rem;
+      border-radius: 6px;
+      cursor: pointer;
+      color: white;
+      transition: transform 0.3s, background-color 0.3s, box-shadow 0.3s;
+      font-weight: bold;
+    }
+
+    nav button:hover {
+      transform: scale(1.05);
+      background-color: #c25730;
+      box-shadow: 0 0 15px rgba(255, 255, 255, 0.5);
+    }
+
+    .container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 8rem 2rem 4rem;
+      text-align: center;
+    }
+
+    .glass-box {
+      background: rgba(255, 255, 255, 0.1);
+      border: 2px solid rgba(255, 255, 255, 0.2);
+      border-radius: 15px;
+      padding: 3rem;
+      max-width: 700px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+      margin-top: 2rem;
+      transition: all 0.3s ease;
+    }
+
+    .glass-box:hover {
+      transform: scale(1.05);
+      box-shadow: 0 15px 45px rgba(0, 0, 0, 0.6);
+    }
+
+    h1 {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      animation: pop 1s ease-out;
+    }
+
+    @keyframes pop {
+      from {
+        transform: scale(0.7);
+        opacity: 0;
+      }
+      to {
+        transform: scale(1);
+        opacity: 1;
+      }
+    }
+
+    p {
+      font-size: 1.2rem;
+      margin-bottom: 2rem;
+      line-height: 1.6;
+    }
+
+    .cta-buttons {
+      display: flex;
+      gap: 1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .cta-buttons a button {
+      padding: 0.9rem 2rem;
+      font-size: 1.1rem;
+      border-radius: 8px;
+      background-color: #a14a23;
+      color: white;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .cta-buttons a button:hover {
+      background-color: #c25730;
+      transform: scale(1.05);
+    }
+
+    .cta-buttons button {
+  padding: 0.9rem 2rem;
+  font-size: 1.1rem;
+  border-radius: 8px;
+  background-color: #a14a23;
+  color: white;
+  font-weight: bold;
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.cta-buttons button:hover {
+  background-color: #c25730;
+  transform: scale(1.05);
+}
+
+    footer {
+      margin-top: 3rem;
+      text-align: center;
+      color: #aaa;
+      font-size: 0.9rem;
+    }
+
+    .pause-icon {
+      width: 40px;
+      height: 40px;
+      margin: 1rem auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      animation: pulse 2s infinite;
+    }
+
+    .pause-icon::before,
+    .pause-icon::after {
+      content: '';
+      display: block;
+      width: 10px;
+      height: 100%;
+      background: black;
+      border-radius: 2px;
+    }
+
+    @keyframes pulse {
+      0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+      }
+      50% {
+        transform: scale(1.15);
+        opacity: 0.7;
+      }
+    }
+  </style>
+  <link rel="icon" href="logowebsite.jpg" />
+</head>
+<body>
+
+  <canvas id="triangleCanvas"></canvas>
+
+  <nav>
+    <div class="logo">
+      <div class="pause-icon"></div>
+    </div>
+
+    <a href="index.html"><button>Home</button></a>
+    <button onclick="fadeToGame()">Start Game</button>
+    <a href="how to play.html"><button>How to Play</button></a>
+    <a href="about.html"><button>About</button></a>
+  </nav>
+
+  <div class="container">
+    <div class="glass-box">
+      <div class="pause-icon"></div>
+      <h1>Welcome to SPause</h1>
+      <p>
+        An platformer that uses pause button and sliders as an obstacle to complete levels. Can you complete this game by using strategy with pause button and sliders?
+      </p>
+
+      <div class="cta-buttons">
+        <button onclick="fadeToGame()">Start Playing</button>
+        <a href="how to play.html"><button>How to Play</button></a>
+        <a href="about.html"><button>Learn More</button></a>
+      </div>
+    </div>
+  </div>
+
+  <div id="fadeOverlay"></div>
+
+  <footer>
+    &copy; 2025 Pause Former. All rights reserved.
+  </footer>
+
+  <script>
+    const canvas = document.getElementById("triangleCanvas");
+    const ctx = canvas.getContext("2d");
+    let width, height;
+    let stars = [];
+  
+    function resize() {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    }
+  
+    window.addEventListener("resize", resize);
+    resize();
+  
+    function createStar() {
+      return {
+        x: Math.random() * width,
+        y: Math.random() * height,
+        size: Math.pow(Math.random(), 0.5) * 10 + 5,
+        speedX: Math.random() * 0.2 - 0.1,
+        speedY: Math.random() * 0.2 - 0.1,
+        opacity: Math.random() * 0.4 + 0.3,
+        angle: Math.random() * Math.PI * 2
+      };
+    }
+  
+    function drawStar(ctx, size, opacity) {
+      ctx.beginPath();
+      ctx.moveTo(0, -size);
+      for (let i = 1; i < 10; i++) {
+        const angle = i * Math.PI / 5;
+        const radius = i % 2 === 0 ? size : size * 0.4;
+        ctx.lineTo(Math.sin(angle) * radius, -Math.cos(angle) * radius);
+      }
+      ctx.closePath();
+      ctx.fillStyle = `rgba(255, 255, 255, ${opacity})`;
+      ctx.fill();
+    }
+  
+    for (let i = 0; i < 9; i++) {
+      stars.push(createStar());
+    }
+
+    function fadeToGame() {
+    const overlay = document.getElementById('fadeOverlay');
+    overlay.style.opacity = '1';
+    overlay.style.pointerEvents = 'all';
+
+    setTimeout(() => {
+      window.location.href = "jsGame.html";
+    }, 500);
+  }
+  
+    function draw() {
+      ctx.clearRect(0, 0, width, height);
+      for (let s of stars) {
+        ctx.save();
+        ctx.translate(s.x, s.y);
+        ctx.rotate(s.angle);
+        drawStar(ctx, s.size, s.opacity);
+        ctx.restore();
+  
+        s.x += s.speedX;
+        s.y += s.speedY;
+        s.angle += 0.003;
+  
+        if (s.x < -50 || s.x > width + 50 || s.y < -50 || s.y > height + 50) {
+          Object.assign(s, createStar());
+        }
+      }
+      requestAnimationFrame(draw);
+    }
+  
+    draw();
+  </script>  
+
+</body>
+</html>
